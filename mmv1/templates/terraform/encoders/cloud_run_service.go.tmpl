@@ -17,6 +17,18 @@ if obj["metadata"] == nil {
 metadata := obj["metadata"].(map[string]interface{})
 metadata["name"] = name
 
+// Remove resourceVersion from metadata to prevent 409 version conflicts.
+// The Cloud Run v1 replaceService API enforces optimistic concurrency when
+// resourceVersion is present in the request body. Because the expand function
+// includes this output-only field from Terraform state, the value may be stale
+// if the service was modified externally (e.g., by CI/CD deployments or the
+// Cloud Console). The existing IsCloudRunCreationConflict retry predicate
+// retries 409s but replays the same body, so the stale version always fails.
+// Omitting resourceVersion allows unconditional updates, which is the correct
+// behavior for Terraform as the source of truth.
+// See: https://cloud.google.com/run/docs/reference/rest/v1/namespaces.services/replaceService
+delete(metadata, "resourceVersion")
+
 // The only acceptable version/kind right now
 obj["apiVersion"] = "serving.knative.dev/v1"
 obj["kind"] = "Service"
